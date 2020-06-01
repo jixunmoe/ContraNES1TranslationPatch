@@ -1,0 +1,106 @@
+Ophis Assembler Tutorial
+
+Part 5: Local variables and memory segments
+
+As mentioned in Part 4, there are better ways to handle waiting
+than just executing vast numbers of NOPs.  The Commodore 64
+KERNAL library includes a "rdtim" routine that returns the uptime
+of the machine, in 60ths of a second, as a 24-bit integer.  The
+C64 programmer's guide available online actually has a bug in it,
+reversing the significance of the A and Y registers.  The accumulator
+holds the *least* significant byte, not the most.
+
+Here's a first shot at a better delay routine, then:
+
+.scope
+	; data used by the delay routine
+	_tmp:    .byte 0
+	_target: .byte 0
+
+delay:	sta _tmp	; save argument (rdtim destroys it)
+	jsr rdtim
+	clc
+	adc _tmp	; add current time to get target
+	sta _target
+*	jsr rdtim
+	cmp _target
+	bmi -		; Buzz until target reached
+	rts
+.scend
+
+This works, but it eats up two bytes of file space that don't
+really need to be specified.  Also, it's modifying data inside
+a program text area, which isn't good if you're assembling to a
+ROM chip.  (Since the Commodore 64 stores its programs in RAM, it's
+not an issue for us here.)  A slightly better solution is to use .alias
+to assign the names to chunks of RAM somewhere.  There's a 4K chunk of
+RAM from $C000 through $CFFF between the BASIC ROM and the I/O ROM that
+should serve our purposes nicely.  We can replace the definitions of
+_tmp and _target with:
+
+	; data used by the delay routine
+	.alias _tmp    $C000
+	.alias _target $C001
+
+This works better, but now we've just added a major bookkeeping
+burden upon ourselves - we must ensure that no routines step on each
+other.  What we'd really like are two separate program counters -- one
+for the program text, and one for our variable space.
+
+Ophis lets us do this with the .text and .data commands.  The .text
+command switches to the program-text counter, and the .data command
+switches to the variable-data counter.  When Ophis first starts
+assembling a file, it starts in .text mode.
+
+To reserve space for a variable, use the .space command.  This takes
+the form ".space varname size", which assigns the name "varname" to the
+current program counter, then advances the program counter by the amount
+specified in "size".  Nothing is output to the final binary as a result
+of the .space command.
+
+You may not put in any commands that produce output into a .data 
+segment.  Generally, all you will be using are .org and .space 
+commands.  Ophis will not complain if you use .space inside a .text
+segment, but this is nearly always wrong.
+
+The final version of our delay routine looks like this:
+
+; DELAY routine.  Takes values from the Accumulator and pauses
+; for that many jiffies (1/60th of a second).
+.scope
+.data
+.space _tmp 1
+.space _target 1
+
+.text
+
+delay:	sta _tmp	; save argument (rdtim destroys it)
+	jsr rdtim
+	clc
+	adc _tmp	; add current time to get target
+	sta _target
+*	jsr rdtim
+	cmp _target
+	bmi -		; Buzz until target reached
+	rts
+.scend
+
+We're not quite done yet, however, because we have to tell the
+data segment where to begin.  (If we don't, it starts at 0, which is
+usually wrong.)  We add a very brief data segment to the top of our code:
+
+.data
+.org $C000
+.text
+
+This will run.  However, we also ought to make sure that we aren't
+overstepping any boundaries.  Our program text shouldn't run into the
+BASIC chip at $A000, and our data shouldn't run into the I/O region
+at $D000.  The .checkpc command lets us assert that the program counter
+hasn't reached a specific point yet.  We put, at the end of our code:
+
+.checkpc $A000
+.data
+.checkpc $D000
+
+The final program is available as tutor5.p65.

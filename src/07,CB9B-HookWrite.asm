@@ -1,0 +1,5 @@
+; 07:CB9B:8D 07 20  STA $2007
+; 01CBAB
+.org $CB9B
+
+JSR $FB40

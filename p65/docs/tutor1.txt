@@ -1,0 +1,196 @@
+Ophis Assembler Tutorial
+
+Part 1: The basics
+
+In this first part of the tutorial we will create a simple "hello world" program
+to run on the Commodore 64.  This will cover:
+
+- How to make programs run on a C-64
+- Writing simple code with labels
+- Numeric and string data
+- Invoking the assembler
+
+A note on numeric notation
+
+Throughout these tutorials, I will be using a lot of both decimal and 
+hexadecimal notation.  Hex numbers will have a dollar sign in front
+of them.  Thus, 100 = $64, and $100 = 256.
+
+Producing C-64 programs
+
+Commodore 64 programs are stored in the ".PRG" format on disk.
+Some emulators (such as CCS64) can run .PRG programs directly;
+others (such as VICE) need them to be transferred to a .D64 image
+first.
+
+The .PRG format is ludicrously simple.  It has two bytes of header
+data: This is a little-endian number indicating the starting address.
+The rest of the file is a single continuous chunk of data loaded into
+memory, starting at that address.  BASIC memory starts at memory location
+2048, and that's probably where we'll want to start.
+
+Well, not quite.  We want our program to be callable from BASIC, so we
+should have a BASIC program at the start.  We guess the size of a simple
+one line BASIC program to be about 16 bytes.  Thus, we start our program
+at memory location 2064 ($0810), and the BASIC program looks like this:
+
+10 SYS 2064
+
+We SAVE this program to a file, then study it in a debugger.  It's 15
+bytes long:
+
+1070:0100  01 08 0C 08 0A 00 9E 20-32 30 36 34 00 00 00      ....... 2064...
+
+The first two bytes are the memory location: $0801.  The rest of the data
+breaks down as follows:
+
+$0801-$0802: 2-byte pointer to the next line of BASIC code ($080C).
+$0803-$0804: 2-byte line number ($000A = 10).
+$0805:       Byte code for the SYS command.
+$0806-$080A: the rest of the line, which is just the string " 2064".
+$080B:       Null byte, terminating the line.
+$080C-$080D: 2-byte pointer to the next line of BASIC code ($0000 = end of program).
+
+That's 13 bytes.  We started at 2049, so we need 2 more bytes of filler to make 
+our code actually start at location 2064.  These 17 bytes will give us the file
+format and the BASIC code we need to have our machine language program run.
+
+These are just bytes - indistinguishable from any other sort of data.  In Ophis,
+bytes of data are specified with the .byte command.  We'll also have to tell Ophis
+what the program counter should be, so that it knows what values to assign to
+our labels.  The .org (origin) command tells Ophis this.  Thus, the Ophis code for
+our header and linking info is:
+
+.byte $01, $08, $0C, $08, $0A, $00, $9E, $20
+.byte $32, $30, $36, $34, $00, $00, $00, $00
+.byte $00, $00
+.org $0810
+
+This gets the job done, but it's completely incomprehensible, and it only
+uses two directives -- not very good for a tutorial.  Here's a more complicated,
+but much clearer, way of saying the same thing.
+
+.word $0801
+.org  $0801
+
+	.word next, 10		; Next line and current line number
+	.byte $9e," 2064",0	; SYS 2064
+next:	.word 0			; End of program
+
+.advance 2064
+
+This code has many advantages over the first.
+
+- It describes better what is actually happening.  The .word directive at 
+  the beginning indicates a 16-bit value stored in the typical 65xx way 
+  (small byte first).  This is followed by an .org statement, so we let the 
+  assembler know right away where everything is supposed to be.
+
+- Instead of hardcoding in the value $080C, we instead use a label to 
+  identify the location it's pointing to.  Ophis will compute the address of
+  "next" and put that value in as data.  We also describe the line number 
+  in decimal since BASIC line numbers generally *are* in decimal.  Labels
+  are defined by putting their name, then a colon, as seen in the definition
+  of "next".
+
+- Instead of putting in the hex codes for the string part of the BASIC code,
+  we included the string directly.  Each character in the string becomes one
+  byte.
+
+- Instead of adding the buffer ourselves, we used .advance, which outputs
+  zeros until the specified address is reached.  Attempting to .advance
+  backwards produces an assemble-time error.
+
+- It has comments that explain what the data are for.  The semicolon is
+  the comment marker; everything from a semicolon to the end of the line
+  is ignored.
+
+Related commands and options
+
+- This code includes constants that are both in decimal and in hex.  It is 
+  also possible to specify constants in octal, binary, or with an ASCII
+  character.
+
+  - To specify decimal constants, simply write the number.  
+  - To specify hexadecimal constants, put a $ in front.
+  - To specify octal constants, put a 0 (zero) in front.
+  - To specify binary constants, put a % in front.
+  - To specify ASCII constants, put an apostrophe in front.
+
+  Example: 65 = $41 = 0101 = %1000001 = 'A
+
+- There are other commands besides .byte and .word to specify data.
+  In particular, the .dword command specifies four-byte values which
+  some applications will find useful.  Also, some linking formats
+  (such as the .SID format) have header data in big-endian (high byte
+  first) format.  The .wordbe and .dwordbe directives provide a way
+  to specify multibyte constants in big-endian formats cleanly.
+
+Writing the actual code
+
+Now that we have our header information, let's actually write the 
+"Hello world" program.  It's pretty short - a simple loop that
+steps through a hardcoded array, passing each character to the
+KERNAL's 'chrout' routine until it reaches a 0 or outputs 256
+characters.  It then returns control to BASIC with an RTS statement.
+
+	ldx #0
+loop:	lda hello, x
+	beq done
+	jsr $ffd2
+	inx
+	bne loop
+done:	rts
+
+hello:	.byte "HELLO, WORLD!", 0
+
+(The final source is available in the tutor1.p65 file.)
+
+Assembling the code
+
+The P65-Ophis assembler is a collection of Python modules in the 
+"Ophis" package.  To run the assembler, ensure that the Ophis package
+is reachable from your Python path, then run the "p65.py" script
+Doing this should give a quick help message on the options and format.
+The options are:
+
+  -6510:  This allows the 6510 undocumented opcodes as listed in
+          the VICE documentation.
+  -d:     This allows "deprecated" opcodes and will mostly allow
+          Ophis to compile earlier P65-Perl code.  Don't use this
+          unless you have to.
+  -v 0:   Quiet operation.  Only reports errors.
+  -v 1:   Default operation.  Reports files as they are loaded, and
+          gives statistics on the final output.
+  -v 2:   Verbose operation.  Names each assembler pass as it runs.
+  -v 3:   Debug operation:  Dumps the entire IR after each pass.
+  -v 4:   Full debug operation:  Dumps the entire IR and symbol table
+          after each pass.
+
+The only options Ophis demands are an input file and an output file.  Here's
+a sample session, assembling the tutorial file here:
+
+C:\Mcmartin>python p65.py tutor1.p65 tutor1.prg -v 2
+Loading tutor1.p65
+Running: Macro definition pass
+Running: Macro expansion pass
+Running: Label initialization pass
+Fixpoint failed, looping back
+Running: Label initialization pass
+Running: Circularity check pass
+Running: Expression checking pass
+Running: Easy addressing modes pass
+Running: Label Update Pass
+Fixpoint failed, looping back
+Running: Label Update Pass
+Running: Instruction Collapse Pass
+Running: Mode Normalization pass
+Running: Label Update Pass
+Running: Assembler
+Assembly complete: 45 bytes output (14 code, 29 data, 2 filler)
+
+If your emulator can run .PRG files directly, this file will now run 
+(and print "HELLO, WORLD!" as many times as you type RUN).  Otherwise, 
+use a D64 management utility (VICE comes with one) to put the .PRG on a 
+.D64, then load and run the file off that.
+

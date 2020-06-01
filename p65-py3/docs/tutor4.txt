@@ -1,0 +1,22 @@
+Ophis Assembler Tutorial
+
+Part 4: Automatically repeating blocks
+
+In this tutorial we will add a time-delay routine to slow down the
+output.  We'll add a subroutine called "delay" that executes 
+2,560*(accumulator) NOPs.  By the time the program is finished,
+we'll have executed 768,000 no-ops.  
+
+There actually are better ways of getting a time-delay on the C64;
+we'll deal with those in part 5.  This code gives us an excuse to
+demonstrate the .repeat command.
+
+However.
+
+The .repeat feature actually isn't implemented yet in Ophis.  The
+tutor4.p65 file just has 10 NOP commands in its delay loop.  As a
+result, there isn't really a lot to discuss here.  Feel free to
+look at the source to notice the program structure, since we'll be
+modifying it in the next part.  Note the change to the body of the
+"greet" macro.
+

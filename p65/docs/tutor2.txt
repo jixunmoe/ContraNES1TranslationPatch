@@ -1,0 +1,70 @@
+Ophis Assembler Tutorial
+
+Part 2: Labels and aliases
+
+Labels are an important part of your code.  However, since each
+label must normally be unique, this can lead to "namespace pollution,"
+and you'll find yourself going through ever more contorted constructions
+to generate unique label names.  Ophis offers two solutions to this:
+anonymous labels and temporary labels.  This tutorial will cover both
+of these facilities, and also introduce the aliasing mechanism.
+
+Temporary labels
+
+Temporary labels are the easiest to use.  If a label begins with an
+underscore, it will only be reachable from inside the innermost enclosing
+scope.  Scopes, in turn, are defined with the .scope and .scend statements.
+
+Scopes may be nested, but it's unusual to need to do so.
+
+The header data with temporary labels would look like this, then:
+
+.word $0801
+.org  $0801
+
+.scope
+	.word _next, 10		; Next line and current line number
+	.byte $9e," 2064",0	; SYS 2064
+_next:	.word 0			; End of program
+.scend
+
+.advance 2064
+
+Anonymous labels
+
+Anonymous labels are a way to handle short-ranged branches without
+having to come up with names for the then and else branches, for
+brief loops, and other such purposes.  To define an anonymous label,
+use an asterisk.  To refer to an anonymous label, use a series of + or
+- signs.  + refers to the next anonymous label, ++ the label after that,
+etc.  Likewise, - is the most recently defined label, -- the one before
+that, and so on.  The main body of the Hello World program with anonymous
+labels would be:
+
+	ldx #0
+*	lda hello, x
+	beq +
+	jsr $ffd2
+	inx
+	bne -
+*	rts
+
+It is worth noting that anonymous labels are globally available.  They
+are not temporary labels, and they ignore scoping restrictions.
+
+Aliasing
+
+Rather the reverse of anonymous labels, aliases are names given to
+specific memory locations.  These make it easier to keep track of
+important constants or locations.  The KERNAL routines are a good
+example of constants that deserve names.  To assign the name "chrout"
+to the value $ffd2, simply give the directive:
+
+.alias chrout $ffd2
+
+And change the jsr command to:
+
+	jsr chrout
+
+The final version of the code is in tutor2.p65.  It should assemble
+to exactly the same program as tutor1.p65.

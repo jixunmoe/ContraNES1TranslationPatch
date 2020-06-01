@@ -1,0 +1,142 @@
+Ophis Assembler Tutorial
+
+Part 3: Headers, Libraries, and Macros
+
+On to the good stuff.  In this tutorial we will split away parts 
+of our Hello World program into reusable header files and libraries.
+We will also abstract away our string printing technique into a
+macro which may be invoked at will, on arbitrary strings.  We
+will then multiply the output of our program tenfold.
+
+Header files and libraries
+
+The prelude to our program -- the PRG information and the BASIC
+program -- are going to be the same in many, many programs.  Thus,
+we should put them into a header file to be included later.  The
+.include directive will load a file and insert it as source at the
+designated point.
+
+A related directive, .require, will include the file as long as it
+hasn't been included yet elsewhere.  It is useful for ensuring a
+library is linked in.
+
+For pre-assembled code or raw binary data, the .incbin directive
+lets you include the contents of a binary file directly in the
+output.  This is handy for linking in pre-created graphics or
+sound data.
+
+As a sample library, we will expand the definition of the chrout
+routine to include the standard names for every KERNAL routine.  Our
+header file will then .require it.
+
+Since there have been no interesting changes to the prelude, and the
+KERNAL values are standard, we do not reproduce them here.  (The
+files in question are c64-1.p65 and kernal.p65.)
+
+Macros
+
+A macro is a way of expressing a lot of code or data with a simple
+shorthand.  It's also usually configurable.  Traditional macro systems
+such as C's #define mechanic use "textual replacement":  A macro is
+expanded before any evaluation or even parsing occurs.
+
+In contrast, Ophis' macro system uses a "call by value" approach where
+the arguments to macros are evaluated to bytes or words before being
+inserted into the macro body.  This produces effects much closer to
+those of a traditional function call.  A more detailed discussion of
+the tradeoffs may be found in the Ophis command reference.
+
+Macro definitions
+
+A macro definition is a set of statements between a .macro statement
+and a .macend statement.  The .macro statement also names the macro
+being defined.
+
+No global or anonymous labels may be defined inside a macro: temporary
+labels only persist in the macro expansion itself.  (Each macro body
+has its own scope.)
+
+Arguments to macros are referred to by number: the first is _1, the
+second _2, and so on.
+
+Here's a macro that encapsulates the printing routine in our Hello
+World program, with an argument being the address of the string to
+print:
+
+.macro print
+	ldx #0
+_loop:	lda _1, x
+	beq _done
+	jsr chrout
+	inx
+	bne _loop
+_done:
+.macend
+
+Macro invocations
+
+Macros may be invoked in two ways: one that looks like a directive,
+and one that looks like an instruction.
+
+The most common way to invoke a macro is to backquote the name of the
+macro.  It is also possible to use the .invoke command.  These commands
+look like this:
+
+`print msg
+.invoke print msg
+
+Arguments are passed to the macro as a comma-separated list.  They must
+all be expressions that evaluate to byte or word values - a mechanism
+similar to .alias is used to assign their values to the _n names.
+
+Example code
+
+Here's some expanded code that defines yet another macro, "greet", that
+takes a string argument and prints a greeting to it.  It then greets
+far too many targets.  This code is available as tutor3.p65.
+
+.include "c64-1.p65"
+
+.macro print
+	ldx #0
+_loop:	lda _1, x
+	beq _done
+	jsr chrout
+	inx
+	bne _loop
+_done:
+.macend
+
+.macro greet
+	`print hello1
+	`print _1
+	`print hello2
+.macend
+
+	lda #147
+	jsr chrout
+	`greet target1
+	`greet target2
+	`greet target3
+	`greet target4
+	`greet target5
+	`greet target6
+	`greet target7
+	`greet target8
+	`greet target9
+	`greet target10
+	rts
+
+hello1: .byte "HELLO, ",0
+hello2: .byte "!", 13, 0
+
+target1:  .byte "PROGRAMMER", 0
+target2:  .byte "ROOM", 0
+target3:  .byte "BUILDING", 0
+target4:  .byte "NEIGHBORHOOD", 0
+target5:  .byte "CITY", 0
+target6:  .byte "NATION", 0
+target7:  .byte "WORLD", 0
+target8:  .byte "SOLAR SYSTEM", 0
+target9:  .byte "GALAXY", 0
+target10: .byte "UNIVERSE", 0

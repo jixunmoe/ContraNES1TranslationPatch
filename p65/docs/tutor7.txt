@@ -1,0 +1,106 @@
+Ophis Assembler Tutorial
+
+Part 7: Advanced Memory Segments
+
+This is the last section of the Ophis tutorial.  By now we've covered
+the basics of every command in the assembler; in this final
+installment we show the full capabilities of the .text and .data
+commands as we produce a final set of C64 header files.
+
+The Problem
+
+Our print'str routine in tutor6.p65 accesses memory locations $10 and
+$11 directly.  We'd prefer to have symbolic names for them.  This
+reprises our concerns back in part 5 when we concluded that we wanted
+two separate program counters.  Now we realize that we really need
+three; one for the text, one for the data, and one for the zero page
+data.  And if we're going to allow three, we really should allow
+arbitrary numbers.
+
+The Solution
+
+The .data and .text commands can take a label name after them - this
+names a new segment.  We'll define a new segment called "zp" (for
+'zero page') and have our zero-page variables be placed there.
+
+The Commodore 64's zero page, however, is used up entirely by the
+hardware and ROM chips.  Locations 0 and 1 control the memory
+mapper, locations $02-$7F are used by the BASIC interpreter, and
+locations $80-$FF are used by the KERNAL.  Well, we don't need the
+BASIC interpreter, so we can back up all of $02-$7F at the start of
+our program and restore it all when we're done.  Our header file will
+thus look like this:
+
+.word $0801
+.org  $0801
+
+.scope
+	.word _next, 10		; Next line and current line number
+	.byte $9e," 2064",0	; SYS 2064
+_next:	.word 0			; End of program
+.scend
+
+.advance $0810
+
+.require "kernal.p65"
+
+.data zp
+.org $0002
+
+.text
+
+.scope
+	; Cache BASIC's zero page at top of available RAM.
+	ldx #$7E
+*	lda $01, x
+	sta $CF81, x
+	dex
+	bne -
+
+	jsr _main
+
+	; Restore BASIC's zero page and return control.
+
+	ldx #$7E
+*	lda $CF81, x
+	sta $01, x
+	dex
+	bne -
+	rts
+
+_main:
+	; Program follows...
+.scend
+
+This file is available as c64-2.p65.
+
+Our print'str routine is then rewritten to declare and use a zero-apge
+variable, like so:
+
+; PRINTSTR routine.  Accumulator stores the low byte of the address,
+; X register stores the high byte.  Destroys the values of $10 and
+; $11.
+
+.scope
+.data zp
+.space _ptr 2
+.text
+printstr:
+	sta _ptr
+	stx _ptr+1
+	ldy #$00
+_lp:	lda (_ptr),y
+	beq _done
+	jsr chrout
+	iny
+	bne _lp
+_done:	rts
+.scend
+
+Also, we ought to put in an extra check to make sure our zero-page
+allocations don't overflow, either:
+
+.data zp
+.checkpc $80
+
+The final code is available as tutor7.p65.
